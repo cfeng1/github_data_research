@@ -11,7 +11,7 @@ library(lubridate,warn.conflicts = FALSE)
 ```{r,echo=FALSE}
 languages <- c('c','chash','cplus','java','javascript','php','python')
 
-loc <- paste('C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Data/commits/',
+loc <- paste('C:/Users/mmore/Dropbox/GitHub/Data/commits/',
              languages[1],
              '_commits_202003.csv',
              sep='')
@@ -23,7 +23,7 @@ df_commits$language_code <- 1
 i <- 2
 for (language in languages[-1]){
   
-  loc <- paste('C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Data/commits/',
+  loc <- paste('C:/Users/mmore/Dropbox/GitHub/Data/commits/',
                language,
                '_commits_202003.csv',sep='')
   df_temp <- read.csv(loc)
@@ -163,12 +163,12 @@ plot_commits <-function(lng){
 ```
 
 ```{r}
-plot_commits('C')  
-plot_commits('python')
-plot_commits('javascript')
-plot_commits('php')
-plot_commits('java')
-plot_commits('chash')
+#plot_commits('C')  
+#plot_commits('python')
+#plot_commits('javascript')
+#plot_commits('php')
+#plot_commits('java')
+#plot_commits('chash')
 ```
 
 
@@ -265,7 +265,7 @@ df <- df_um %>%
 #Filter based on activity measures
 n_active_users <- length(unique(df$author_id))
 
-loc <- paste('C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Data/commits/productive_users_50_2_',
+loc <- paste('C:/Users/mmore/Dropbox/GitHub/Data/commits/productive_users_50_2_',
              period,
              ',.csv')
 
@@ -294,6 +294,7 @@ There are a total number of `r n_active_users` users who:
 * *number_project*: total number of projects an user made contribution to
 * *time active*: number of days between first and last commit 
 * *n_languages*: number of languages an author has committed in hist life
+
 ```{r}
 h <- hist(df_u$n_languages, breaks = 100, plot=FALSE,title='N. Languages')
 h$counts=h$counts/sum(h$counts)
