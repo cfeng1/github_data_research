@@ -1,26 +1,25 @@
 # Github Data Research
 Research on GitHub collaboration patterns.
 
-## Data Query
+## Data Collection
 
-MySQL Query to pull down commits history of projects in Javascript, Java, Python, PHP, C, C#, C++.
+Folder "data_collection" stores queries that collects data in the sample. 
 
-```mysql
-SELECT commits.id,
-commits.author_id,
-commits.project_id, 
-commits.created_at AS commit_created_at,
-projects.language,
-projects.created_at AS projects_created_at
-FROM commits
-INNER JOIN projects ON commits.project_id = projects.id
-WHERE projects.language = 'java'
-AND projects.forked_from IS NULL
-AND projects.created_at >= '2010-01-01'
-AND (LOCATE('module', description)>0
-OR LOCATE('library', description)>0
-OR LOCATE('package', description)>0)
-```
-To-do:
-Might need to get 'owner_id' from 'projects'; watchers info, .etc.
+- Start from PyPI repositories (based on 
+[Valiev, Vasilescu, Herbsleb (2018)](https://zenodo.org/record/1297925#.XrsPQBP0kWo)),
+track commit history of all authors including contributions to those that are not in PyPI.
 
+- Complementary data:
+	unreleased Python data, also need to track all author's contribution history
+
+## Exploratory Data Analysis
+
+Folder for notebooks and results for exploratory data analysis (reduced-form).
+
+## Model Estimation
+
+Folder for structural model and related estimation codes.
+
+## Counterfactual Analysis
+
+Folder for codes of counterfactual Analysis
