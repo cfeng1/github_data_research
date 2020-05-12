@@ -1,0 +1,186 @@
+---
+title: "Analysis"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+
+```{r,echo=FALSE}
+library(dplyr,warn.conflicts = FALSE)
+library(lubridate,warn.conflicts = FALSE)
+options(scipen=10**7)
+```
+
+# Variable Description
+
+* *author_id*: user identifier
+* *month*: period of reference
+* *monthly_commits*: total number of commits made in a month
+* *monthly_project*: number of different project a user commited in a month
+* *first_commit*: month in which user made the first recorded commit
+* *last_commit*: month in which user made the last recorded commit
+* *total_commits*: total number of commits made by a user over time
+* *number_project*: total number of projects an user made contribution to
+* *time active*: number of days between first and last commit 
+
+```{r}
+period <- 'm'
+loc <- paste('C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Data/commits/productive_users_50_2_',
+             period,
+             '.csv',
+             sep='')
+df_pu <- read.csv(loc)
+```
+
+
+# Multi-Language
+
+```{r}
+df <- df_pu %>%
+      group_by(author_id) %>%
+      summarize(n_languages=n_distinct(language))
+
+```
+
+
+# Multitasking
+
+
+
+```{r}
+multi_task_t <- 2
+
+tot_active <- df_pu %>% filter(period_project>=1) %>%
+                        summarise(n())
+tot_active_multi <- df_pu %>% filter(period_project>=multi_task_t) %>%
+                        summarise(n())  
+  
+N_obs <- nrow(df_pu)
+period_active <- round(as.numeric(tot_active/nrow(df_pu))*100,2)
+period_multi_task <- round(as.numeric(tot_active_multi/tot_active)*100,2)    
+
+```
+
+We define an user *i* as active in month *t*  if the user has contributed to at least one project *j*. We define that agent *i* did multi-tasking in month *t* if she contributed to at least two different projects. 
+In the selected sample, we have:
+
+* `r N_obs` pair of user-month observations 
+* `r period_active`% of the pairs *(i,t)* (user-month) have at least one commit, i.e. the user *i* is active is active in month *t*
+* `r period_multi_task`%  of the pairs *(i,t)* (user-month) in which usere is active are subject to multitasking.  
+* In total, we have `r round(period_active * period_multi_task / 100,2)`% observations in which agents perform multi-tasking
+
+
+```{r}
+
+multi_task_t <- 2
+threshold <- 500
+
+tot_active_500 <- df_pu %>% filter(period_project>=1) %>%
+                            filter(total_commits>=threshold) %>%
+                            summarise(n())
+
+tot_active_multi_500 <- df_pu %>% 
+                    filter(total_commits>=threshold) %>%
+                    filter(period_project>=multi_task_t) %>%
+                    summarise(n())  
+
+N_obs_500 <- df_pu %>%
+             filter(total_commits>=threshold)%>%
+             summarise(n())
+
+N_obs_500 <- as.numeric(N_obs_500)
+
+
+period_active_500 <- round(as.numeric(tot_active_500/N_obs_500)*100,2)
+period_multi_task_500 <- round(as.numeric(tot_active_multi_500/tot_active_500)*100,2)    
+
+```
+
+In we restrict to users who have made at least `r threshold` commits in their history, we have:
+
+* 
+* `r N_obs_500` pair of user-month observations 
+* `r period_active_500`% of the pairs *(i,t)* (user-month) have at least one commit, i.e. the user *i* is active is active in month *t*
+* `r period_multi_task_500`%  of the pairs *(i,t)* (user-month) in which usere is active are subject to multitasking.  
+* In total, we have `r round(period_active_500 * period_multi_task_500/ 100,2) `% observations in which agents perform multi-tasking
+
+```{r}
+thresholds <- seq(50,1550,100)
+store <- matrix(0,6,length(thresholds))
+
+i <- 1
+
+for (threshold in thresholds){
+  
+  store[1,i] <- as.numeric(df_pu %>% filter(total_commits>=threshold) %>% summarise(n_distinct(author_id)))
+  df_temp <- df_pu %>% filter(total_commits>=threshold) %>% 
+                                     group_by(author_id) %>% 
+                                     mutate(multi = max(period_project)) %>%
+                                     filter(multi>1) 
+  
+  store[2,i] <- round(length(unique(df_temp$author_id))/store[1,i] * 100,2)
+  
+  df_temp <- df_pu %>% filter(total_commits>=threshold) 
+  store[3,i] <- nrow(df_temp)
+  
+  df_temp <- df_pu %>% filter(period_project>1) %>%
+                       filter(total_commits>=threshold) 
+  
+  store[4,i] <- round(nrow(df_temp)  * 100 / store[3,i],2) 
+  df_temp <- df_pu %>% filter(period_project>=1) %>%
+                       filter(total_commits>=threshold) 
+  
+  store[5,i] <- round(nrow(df_temp) * 100 / store[3,i],2)
+  
+  store[6,i] <- as.numeric(df_pu %>% filter(total_commits>=threshold) %>% summarise(sum(period_commits)))
+  
+
+  i <- i + 1
+
+}
+
+rownames(store) <- c('N.Users','Share of Users Multitasking at least 1 Period','N. Obs','Share of Obs. with multi-tasking','Share of Obs. with Commits','Tot. Number of Commits')
+colnames(store) <- paste('>=',thresholds,sep='')
+View(store)
+rm(df_temp)
+
+```
+
+
+
+```{r}
+plot(thresholds,store[1,],
+     xlab='Lower Bound on Total N. of Commits',
+     ylab='',
+     main=rownames(store)[1])
+
+plot(thresholds,store[3,],
+     xlab='Lower Bound on Total N. of Commits',
+     ylab='',
+     main=rownames(store)[3])
+
+plot(thresholds,store[2,],
+     xlab='Lower Bound on Total N. of Commits',
+     ylab='',
+     main=rownames(store)[2])
+
+plot(thresholds,store[5,],
+     xlab='Lower Bound on Total N. of Commits',
+     ylab='%',
+     main=rownames(store)[5])
+
+plot(thresholds,store[4,],
+     xlab='Lower Bound on Total N. of Commits',
+     ylab='%',
+     main=rownames(store)[4])
+
+plot(thresholds,store[6,],
+     xlab='Lower Bound on Total N. of Commits',
+     ylab='',
+     main=rownames(store)[6])
+
+
+```

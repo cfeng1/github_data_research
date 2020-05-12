@@ -1,0 +1,304 @@
+---
+title: "Data Manipulation"
+output: html_notebook
+---
+
+```{r,echo=FALSE}
+library(dplyr,warn.conflicts = FALSE)
+library(lubridate,warn.conflicts = FALSE)
+```
+
+```{r,echo=FALSE}
+languages <- c('c','chash','cplus','java','javascript','php','python')
+
+loc <- paste('C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Data/commits/',
+             languages[1],
+             '_commits_202003.csv',
+             sep='')
+
+df_commits <- read.csv(loc)
+df_commits$language <- 'c'   
+df_commits$language_code <- 1 
+
+i <- 2
+for (language in languages[-1]){
+  
+  loc <- paste('C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Data/commits/',
+               language,
+               '_commits_202003.csv',sep='')
+  df_temp <- read.csv(loc)
+  df_temp$language <- language 
+  df_temp$language_code <- i 
+
+  df_commits <- rbind(df_commits,df_temp)
+  
+  i <- i + 1
+
+}
+
+rm(df_temp)
+```
+
+```{r,echo=FALSE}
+head(df_commits)
+colnames(df_commits)[colnames(df_commits) == 'id'] <- 'commit_id'
+colnames(df_commits)[colnames(df_commits) == 'commit_created_at'] <- 'commit_time'
+df_commits$commit_time <- as.Date(sub(" .*","",as.character(df_commits$commit_time)),
+                                  format='%Y-%m-%d')
+```
+
+```{r}
+n_projects <- length(unique(df_commits$project_id))
+n_committers <- length(unique(df_commits$author_id))
+```
+
+There are a total of `r n_projects` projects, and `r n_committers` users have contributed to such projects. 
+
+# Users 
+
+```{r,echo=FALSE}
+
+commits_author <- df_commits %>% 
+                  count(project_id,author_id) %>%
+                  group_by(author_id) %>% 
+                  summarise(total = sum(n))
+
+quants <- quantile(commits_author$total,probs = c(0.80,0.90,0.95,0.99))
+
+var_80 <- round(sum(filter(commits_author,total > quants[1])$total)/sum(commits_author$total) * 100,1)
+var_90 <- round(sum(filter(commits_author,total > quants[2])$total)/sum(commits_author$total) * 100,1)
+var_95 <- round(sum(filter(commits_author,total > quants[3])$total)/sum(commits_author$total) * 100,1)
+var_99 <- round(sum(filter(commits_author,total > quants[4])$total)/sum(commits_author$total) * 100,1)
+
+
+```
+
+We define productivity of a user as the total number of commits that a person has made since they joined Github. Here we focus on the subsample of users who have made at least one commit. 
+
+* The top 20% most productive users (i.e. with at least `r quants[1]` commits) contribute to nearly `r var_80`% of the total commits.
+
+* The top 10% most productive users (i.e. with at least `r quants[2]` commits) contribute to nearly `r var_90`% of the total commits.
+
+* The top 5% most productive users (i.e. with at least `r quants[3]` commits) contribute to nearly `r var_95`% of the total commits.
+
+* The top 1% most productive users (i.e. with at least `r quants[4]` commits) contribute to nearly `r var_99`% of the total commits.
+
+# Projects
+```{r}
+commits_project <- df_commits %>% 
+                   group_by(project_id) %>% 
+                   summarise(total_commits = n()) 
+
+var_10 <- round(ecdf(commits_project$total_commits)(10) * 100, 1)
+var_100 <- 100 - round(ecdf(commits_project$total_commits)(100) * 100, 1)
+```
+
+* `r var_10`% of the projects have at most 10 commits.  
+* `r var_100`% of the projects have at least 100 commits.  
+
+Is it true that more productive users, i.e. users that have a higher number of commits, are also involved in more projects? 
+
+```{r}
+df <- df_commits %>% 
+        group_by(author_id) %>% 
+        summarise(total_commit = n(), n_projects = n_distinct(project_id)) 
+
+thresholds <- c(0,25,50,75,100,250,500,20000)
+store <- matrix(0,2,length(thresholds)-1)
+
+for (i in 1:(length(thresholds)-1)){
+  store[,i] <- as.numeric(filter(df,total_commit >=thresholds[i] & total_commit < thresholds[i+1])
+                          %>% summarise(mean(n_projects),n()))
+}
+
+colnames(store) <- c('<25','[25,50)','[50,75)','[75,100)','[100,250)','[250,500)','500+')
+rownames(store) <- c('Avg. Number of Project','N. Authors')
+write.csv(store,'C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Output/table_1.csv')
+View(store)
+rm(df)
+```
+
+# Time Trends in Total Number of Commits
+
+```{r,echo=FALSE}
+start_date <- as.Date('2009-06-01')
+end_date <- as.Date('2019-05-01')
+
+df <- df_commits %>% 
+      group_by(month=floor_date(commit_time,"month")) %>%
+      summarize(monthly_commits=n()) %>%
+      filter(month>=start_date) %>%
+      filter(month<=end_date)
+
+plot(seq(start_date,end_date,by='month'),
+     df$monthly_commits,
+     xlab='Date',
+     ylab='N. Commits',
+     main='Total Number of Monthly Commits over Time')
+
+rm(df)
+```
+
+```{r,echo=FALSE}
+plot_commits <-function(lng){
+  
+  start_date <- as.Date('2009-06-01')
+  end_date <- as.Date('2019-05-01')
+  
+  df <- df_commits %>% 
+        filter(language==lng) %>%
+        group_by(month=floor_date(commit_time,"month")) %>%
+        summarize(monthly_commits=n()) %>%
+        filter(month>=start_date) %>%
+        filter(month<=end_date)
+
+  plot(seq(start_date,end_date,by='month'),
+       df$monthly_commits,
+       xlab='Date',
+       ylab='N. Commits',
+       main=paste('Total Number of Monthly Commits over Time, ',as.character(lng),sep= ' '))
+  
+}
+
+```
+
+```{r}
+plot_commits('C')  
+plot_commits('python')
+plot_commits('javascript')
+plot_commits('php')
+plot_commits('java')
+plot_commits('chash')
+```
+
+
+# Time Trends in Number of Active Projects
+
+```{r,echo=FALSE}
+start_date <- as.Date('2009-06-01')
+end_date <- as.Date('2019-05-01')
+
+df <- df_commits %>% 
+      group_by(month=floor_date(commit_time,"month")) %>%
+      summarize(n_active_projects=n_distinct(project_id)) %>%
+      filter(month>=start_date) %>%
+      filter(month<=end_date)
+
+plot(seq(start_date,end_date,by='month'),
+     df$n_active_projects,
+     xlab='Date',
+     ylab='N. Projects',
+     main='Total Number of Active Projects over Time')
+
+rm(df)
+```
+
+
+
+
+# Productive Users
+
+Vasilescu uses as a way to measure *productive* users the following metrics:
+
+1. at least 500 commits to at least 10 non-forked repositories
+2. at least 5 years between their first and last commit
+
+They identify approximately 1300 users that fall in the category of *productive* users. They solve the problem of aliases, i.e. users who that commit to projects under different names. Vasilescu through some heuristics estimates that approximately 30% of users have multiples alises. 
+
+
+```{r,echo=FALSE}
+period <- 'month'
+
+#Exclude commits that have been made before 2010
+df_commits <- df_commits %>% filter(commit_time>=as.Date('2010-01-01'))
+
+#Create users level statistics
+df_u <- df_commits %>% 
+        group_by(author_id) %>%
+        summarise(first_commit=min(floor_date(commit_time,period)),
+                  last_commit=max(floor_date(commit_time,period)),
+                  total_commits=n(),
+                  n_projects=n_distinct(project_id),
+                  n_languages=n_distinct(language_code)) %>%
+                  mutate(time_active=last_commit-first_commit,
+                  )
+
+#Filter by productivity filter
+n_year <- 1 * 365
+projects <- 2
+commits <- 50
+
+df_u <- df_u %>% 
+        filter(n_projects>= projects) %>%
+        filter(total_commits >= commits) %>%
+        filter(time_active >= n_year)    
+
+#Create users-month level statistics
+df_um <- df_commits %>% 
+         group_by(author_id, period=floor_date(commit_time,period)) %>%
+         summarize(period_commits=n(),
+         period_project=n_distinct(project_id)) 
+
+#Augment the users-month dataset with missing month (i.e. when user did not make any commit)
+if (period=='week'){
+  start_date <- as.Date('2010-01-03')
+}
+if (period=='month'){
+  start_date <- as.Date('2010-01-03')
+}
+end_date <- as.Date('2019-05-01')
+
+df_temp <- expand.grid(author_id = unique(df_u$author_id),
+                       period = seq(start_date,end_date,by=period))
+
+df_um <- df_temp %>%
+         left_join(df_um, by = c("author_id",'period'))
+
+df_um$period_commits[is.na(df_um$period_commits)] <- 0 
+df_um$period_project[is.na(df_um$period_project)] <- 0 
+
+
+#Join the two databses
+df <- df_um %>%
+      left_join(df_u,by='author_id')
+
+#Filter based on activity measures
+n_active_users <- length(unique(df$author_id))
+
+loc <- paste('C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Data/commits/productive_users_50_2_',
+             period,
+             ',.csv')
+
+write.csv(df,loc)
+
+```
+
+# Filter used to classify higly productive users
+
+There are a total number of `r n_active_users` users who:
+
+* are active for at least `r as.integer(n_year/365)` years
+* have contributed to at least `r projects` projects
+* have made at least `r commits` commits
+
+
+# Variable Description
+
+* *author_id*: user identifier
+* *month*: period of reference
+* *monthly_commits*: total number of commits made in a month
+* *monthly_project*: number of different project a user commited in a month
+* *first_commit*: month in which user made the first recorded commit
+* *last_commit*: month in which user made the last recorded commit
+* *total_commits*: total number of commits made by a user over time
+* *number_project*: total number of projects an user made contribution to
+* *time active*: number of days between first and last commit 
+* *n_languages*: number of languages an author has committed in hist life
+```{r}
+h <- hist(df_u$n_languages, breaks = 100, plot=FALSE,title='N. Languages')
+h$counts=h$counts/sum(h$counts)
+plot(h)
+
+```
+
+
