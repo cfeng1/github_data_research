@@ -310,7 +310,7 @@ plot(h)
 period <- 'month'
 start_date <- as.Date('2009-06-01')
 end_date <- as.Date('2019-05-01')
-min_total_commits <- 1000
+min_total_commits <- 5000
 
 df <- df_commits %>%
       group_by(month=as.Date(floor_date(commit_time,period)),project_id) %>%
@@ -340,9 +340,7 @@ df <- df %>%
 rm(df_p)
 
 
-df <- df %>% 
-      group_by(project_id) %>% 
-      filter(sum(n_commits)>=min_total_commits)
+
 
 
 
@@ -352,10 +350,17 @@ df$project_age <- year(df$month) * 12 + month(df$month) - 12 * year(df$project_c
 
 
 ```{r}
-df_temp <- df %>%
+min_total_commits <- 3500
+
+df_temp <- df %>% 
+           group_by(project_id) %>% 
+           filter(sum(n_commits)>=min_total_commits)
+
+df_temp <- df_temp %>%
            group_by(project_age) %>%
            summarise(n=mean(n_commits))
 
+plot(df_temp$n)
 ```
 
 
