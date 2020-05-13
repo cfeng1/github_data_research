@@ -113,7 +113,7 @@ for (i in 1:(length(thresholds)-1)){
 
 colnames(store) <- c('<25','[25,50)','[50,75)','[75,100)','[100,250)','[250,500)','500+')
 rownames(store) <- c('Avg. Number of Project','N. Authors')
-write.csv(store,'C:/Users/mmore/Dropbox/Econometrics II - TA/Project/GitHub/Output/table_1.csv')
+write.csv(store,'C:/Users/mmore/Dropbox/GitHub/Output/table_1.csv')
 View(store)
 rm(df)
 ```
@@ -299,6 +299,62 @@ There are a total number of `r n_active_users` users who:
 h <- hist(df_u$n_languages, breaks = 100, plot=FALSE,title='N. Languages')
 h$counts=h$counts/sum(h$counts)
 plot(h)
+
+```
+
+
+# Projects Life-Cycle
+
+
+```{r}
+period <- 'month'
+start_date <- as.Date('2009-06-01')
+end_date <- as.Date('2019-05-01')
+min_total_commits <- 1000
+
+df <- df_commits %>%
+      group_by(month=as.Date(floor_date(commit_time,period)),project_id) %>%
+      summarize(n_commits=n()) %>%
+      filter(month>=start_date) %>%
+      filter(month<=end_date)
+
+df_p <- df_commits %>%
+        group_by(project_id) %>%
+        summarize(project_created_at=min(commit_time))
+
+df_t <- expand.grid(project_id = unique(df$project_id),
+                    month = seq(start_date,end_date,by=period))
+
+df <- df_t %>%
+      left_join(df,by=c('month','project_id'))
+
+rm(df_t)
+
+df$n_commits[is.na(df$n_commits)] <- 0 
+
+df <- df %>% 
+      left_join(df_p,by='project_id') %>%
+      filter(project_created_at>=start_date) %>%
+      filter(month>=project_created_at)
+
+rm(df_p)
+
+
+df <- df %>% 
+      group_by(project_id) %>% 
+      filter(sum(n_commits)>=min_total_commits)
+
+
+
+df$project_age <- year(df$month) * 12 + month(df$month) - 12 * year(df$project_created_at) - month(df$project_created_at)
+
+```
+
+
+```{r}
+df_temp <- df %>%
+           group_by(project_age) %>%
+           summarise(n=mean(n_commits))
 
 ```
 
