@@ -354,20 +354,19 @@ df <- df %>%
 
 rm(df_p)
 
-
 df$project_age <- year(df$month) * 12 + month(df$month) - 12 * year(df$project_created_at) - month(df$project_created_at)
 df$months_active <- year(df$last_commit) * 12 + month(df$last_commit) - 12 * year(df$project_created_at) - month(df$project_created_at)
 
+
+df$monthly_n_authors[is.na(df$monthly_n_authors)] <- 0
 ```
 
 ```{r,echo=FALSE}
 df_temp <- df %>%
            group_by(project_id) %>%
-           filter(last_commit<='2018-06-01') %>%
-           summarise(total_commits=sum(n_commits),months_active=max(months_active),n_authors=max(n_authors))
+           summarise(total_commits=max(total_commits),months_active=max(months_active),n_authors=max(n_authors))
 
-store <- matrix(0,6,6)           
-as.numeric(df_temp %>% filter(months_active<=1) %>% summarise(n_projects = n(),mean(total_commits)))
+store <- matrix(0,6,7)           
 
 store_fun<- function(df_temp,lb,ub){
   
@@ -383,10 +382,12 @@ store[4,] <- store_fun(df_temp,7,12)
 store[5,] <- store_fun(df_temp,13,36)
 store[6,] <- store_fun(df_temp,37,1000)
 
-colnames(store) <- c('N. Projects','Mean Total Commits','Max Total Commits','Median Total Commits','Mean N. Authors')
+colnames(store) <- c('N. Projects','Mean Total Commits','Max Total Commits','Median Total Commits','Mean N. Authors','Max N. Authors', 'Median N. Authors')
 rownames(store) <- c('1 month','2-3 months', '4-6 months', '7-12 months', '13-36 months', '36+ months')
 print(store)
 ```
+
+#New Projects
 
 ```{r}
 
@@ -405,31 +406,56 @@ plot(df_temp$month,df_temp$n_new_projects)
 
 
 ```{r}
-min_total_commits <- 2500
-max_total_commits <- 200000
+new_plot <- function(df,lb,ub){
+  
+        df_temp <- df %>% 
+                   group_by(project_id) %>% 
+                   filter(sum(n_commits)>=lb,sum(n_commits)<=ub)
+        
+        print(length(unique(df_temp$project_id)))
+        
+        df_temp <- df_temp %>%
+                   group_by(project_age) %>%
+                   summarise(n=mean(n_commits),
+                             p=mean(as.numeric(n_commits>0)),
+                             p10=mean(as.numeric(n_commits>10)),
+                             mean_authors=mean(monthly_n_authors))
+        par(mfrow=c(2,2))
 
-df_temp <- df %>% 
-           group_by(project_id) %>% 
-           filter(sum(n_commits)>=min_total_commits,sum(n_commits)<=max_total_commits)
+        plot(df_temp$n,
+             xlab='Age of the Projects in Months',
+             ylab='N. Commits',
+             main='Monthly Commits vs. Age of Project')
 
-df_temp <- df_temp %>%
-           group_by(project_age) %>%
-           summarise(n=mean(n_commits),p=mean(as.numeric(n_commits>0)),p10=mean(as.numeric(n_commits>10)))
 
-plot(df_temp$n,
-     xlab='Age of the Projects in Months',
-     ylab='N. Commits',
-     main='Monthly Commits vs. Age of Project')
+        plot(df_temp$p[2:84],
+             xlab='Age of the Projects in Months',
+             ylab='Probability',
+             main='Probability Project gets at 
+                   least 1 commit vs. Age')
 
-plot(df_temp$p[2:84],
-     xlab='Age of the Projects in Months',
-     ylab='N. Commits',
-     main='Probability Project gets at least 1 commit vs. Age of Project')
+        plot(df_temp$p10[2:84],
+             xlab='Age of the Projects in Months',
+             ylab='Probability',
+             main='Probability Project gets at 
+                   least 10 commit vs. Age')
+        
+        plot(df_temp$mean_authors[2:84],
+             xlab='Age of the Projects in Months',
+             ylab='N. Authors',
+             main='Average N. of Authors 
+                   Per Month vs. Age')
+        
 
-plot(df_temp$p10[2:84],
-     xlab='Age of the Projects in Months',
-     ylab='N. Commits',
-     main='Probability Project gets at least 10 commit vs. Age of Project')
+ 
+        return()       
+}
+
+new_plot(df,1,500)
+
+new_plot(df,501,2500)
+
+new_plot(df,2501,100000)
 ```
 
 
