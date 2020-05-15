@@ -322,7 +322,7 @@ plot(h)
 period <- 'month'
 start_date <- as.Date('2009-06-01')
 end_date <- as.Date('2019-05-01')
-min_total_commits <- 5000
+
 
 df <- df_commits %>%
       group_by(month=as.Date(floor_date(commit_time,period)),project_id) %>%
@@ -332,7 +332,7 @@ df <- df_commits %>%
 
 df_p <- df_commits %>%
         group_by(project_id) %>%
-        summarize(project_created_at=min(commit_time))
+        summarize(project_created_at=min(commit_time),last_commit=max(commit_time),total_commits=n())
 
 df_t <- expand.grid(project_id = unique(df$project_id),
                     month = seq(start_date,end_date,by=period))
@@ -352,30 +352,57 @@ df <- df %>%
 rm(df_p)
 
 
-
-
-
-
 df$project_age <- year(df$month) * 12 + month(df$month) - 12 * year(df$project_created_at) - month(df$project_created_at)
+df$months_active <- year(df$last_commit) * 12 + month(df$last_commit) - 12 * year(df$project_created_at) - month(df$project_created_at)
 
+```
+
+```{r}
+df_temp <- df %>%
+           group_by(project_id) %>%
+           filter(last_commit<='2018-06-01') %>%
+           summarise(total_commits=sum(n_commits),months_active=max(months_active),)
+
+           
+
+as.numeric(df_temp %>% filter(total_commits<=10,total_commits>0) %>% summarise(n_projects = n(),mean(months_active)))
+
+as.numeric(df_temp %>% filter(total_commits<=100,total_commits>10) %>% summarise(n_projects = n(),mean(months_active)))
+
+as.numeric(df_temp %>% filter(total_commits<=1000,total_commits>100) %>% summarise(n_projects = n(),mean(months_active)))
+
+as.numeric(df_temp %>% filter(total_commits<=10000,total_commits>1000) %>% summarise(n_projects = n(),mean(months_active)))
+
+as.numeric(df_temp %>% filter(total_commits<=1000000,total_commits>10000) %>% summarise(n_projects = n(),mean(months_active)))
 ```
 
 
 ```{r}
-min_total_commits <- 3500
+min_total_commits <- 2500
+max_total_commits <- 200000
 
 df_temp <- df %>% 
            group_by(project_id) %>% 
-           filter(sum(n_commits)>=min_total_commits)
+           filter(sum(n_commits)>=min_total_commits,sum(n_commits)<=max_total_commits)
 
 df_temp <- df_temp %>%
            group_by(project_age) %>%
-           summarise(n=mean(n_commits))
+           summarise(n=mean(n_commits),p=mean(as.numeric(n_commits>0)),p10=mean(as.numeric(n_commits>10)))
 
 plot(df_temp$n,
      xlab='Age of the Projects in Months',
      ylab='N. Commits',
      main='Monthly Commits vs. Age of Project')
+
+plot(df_temp$p[2:84],
+     xlab='Age of the Projects in Months',
+     ylab='N. Commits',
+     main='Probability Project gets at least 1 commit vs. Age of Project')
+
+plot(df_temp$p10[2:84],
+     xlab='Age of the Projects in Months',
+     ylab='N. Commits',
+     main='Probability Project gets at least 10 commit vs. Age of Project')
 ```
 
 
@@ -396,7 +423,7 @@ df <- df_commits %>%
 
 df_p <- df_commits %>%
         group_by(author_id) %>%
-        summarize(author_first_commit=min(commit_time))
+        summarize(author_first_commit=min(commit_time),n_projects=n_distinct(project_id),author_last_commit=max(commit_time))
 
 df_t <- expand.grid(author_id = unique(df$author_id),
                     month = seq(start_date,end_date,by=period))
@@ -417,27 +444,40 @@ rm(df_p)
 
 df$author_age <- year(df$month) * 12 + month(df$month) - 12 * year(df$author_first_commit) - month(df$author_first_commit)
 
-```
-
-First of all, we need to create a measure of users age within the GitHub platform. We set a user to have age 0 to the month in which the user makes the first commit. The question here is the following: how do users behave over their life on Github? Do they contribute greatly to a project, and then stop contributing? Or do they contribute to multiple projects over their lite time? In other words, are users very intensive in the contribution, or do they smoothe it out during their life-time. 
-
-In order to answer these questions, I compute for each users, the share of commits that that user has made in his/her most productive month over the total number of commits that person has made in her life-time on Github. From the histogram below, we see that a significant number of users contribute to at least 95% of the total number of commits they make in a month. As expected, there is a negative correlation between the share of the maximum number of commits in a month (measure of intensity of contribution) and the total number of commits made (measure of overall productivity). In order to avoid capturing users who are in early stages of their life-cycle on GitHub, we make eliminate users who have enter Github (by committing) later than January 2018. 
-
-```{r,echo=FALSE}
 df_temp <- df %>% 
            group_by(author_id) %>% 
            filter(author_first_commit>='2010-01-01') %>%
            filter(author_first_commit<='2018-01-01') %>%
-           summarize(total_commits=sum(n_commits))
+           summarize(total_commits=sum(n_commits)) 
 
 df <- df %>% 
-      left_join(df_temp,by="author_id")
+      left_join(df_temp,by="author_id") #%>%
+      #filter(author_last_commit<='2018-06-01')
+      
 
 df$share_commits <- df$n_commits / df$total_commits
 
+rm(df_temp)
+
+df$author_life <- year(df$author_last_commit) * 12 + month(df$author_last_commit) - 12 * year(df$author_first_commit) - month(df$author_first_commit)
+
+
+```
+
+First of all, we need to create a measure of users age within the GitHub platform. We set a user to have age 0 to the month in which the user makes the first commit. The question here is the following: how do users behave over their life on Github? Do they contribute greatly to a project, and then stop contributing? Or do they contribute to multiple projects over their lite time? In other words, are users very intensive in the contribution, or do they smooth it out during their life-time. 
+
+In order to answer these questions, I compute for each users, the share of commits that that user has made in his/her most productive month over the total number of commits that person has made in her life-time on Github. From the histogram below, we see that a significant number of users contribute to at least 95% of the total number of commits they make in a month. As expected, there is a negative correlation between the share of the maximum number of commits in a month (measure of intensity of contribution) and the total number of commits made (measure of overall productivity). In order to avoid capturing users who are in early stages of their life-cycle on GitHub, we make eliminate users who have enter Github (by committing) later than January 2018.
+
+The results presented below suggest that there is a significant presence of users who contribute intensively, in the sense that the month in which they committed the most corresponds to most of the activity they perform over their entire life on Github. 
+
+```{r,echo=FALSE}
+filter_productivity_commits_min <- 1
+filter_productivity_commits_max <- 250000
+
 df_temp <- df %>%
            group_by(author_id) %>%
-           summarize(max_share=max(share_commits),total_commits=max(total_commits))
+           summarize(max_share=max(share_commits),total_commits=max(total_commits)) %>%
+           filter(total_commits>=filter_productivity_commits_min,total_commits<filter_productivity_commits_max)
 
 hist(df_temp$max_share,
      main='Commits in the most Productive Month, 
@@ -451,22 +491,98 @@ plot(log(df_temp$total_commits),log(df_temp$max_share),
      xlab='Log-Total Commits',
      ylab='Log-Share')
 
+df_temp <- df %>%
+           group_by(author_id) %>%
+           filter(share_commits==max(share_commits)) %>%
+           filter(author_age==min(author_age)) %>%
+           filter(total_commits>=filter_productivity_commits_min,total_commits<filter_productivity_commits_max)
+
+
+hist(df_temp$author_age,
+     main='Age of the User at Largest Contribution',
+     ylab='N. Users',
+     xlab='Age')
+
+
 ```
+We consider here another measure of productivity, which correlates with the number of commits made in total by a user. Considering that ultimately we are measuring the activity of users by the decision to commit, now for each user, we count the total number of periods an user has been active, and we classify users accordingly. For each category of user, we then compute the average number of commits the users in the category have made in their lite on GitHub, the total number of commits made by a category. As we can see, 33% of users contributed in at most one month, contributing to approximately 2% of the total commits. Another 26% of the users contributed for a total of 2-3 months, and a total 5.7% of the total number of commits. These two together represent the most casual contributors to GitHub, and represent approximately 60% of users. It is probably important to remove the more casual users, since it would be hard to justify their contributions in light of the variation in the observables we observe. 
 
 ```{r}
-min_total_commits <- 1500
-
-df_temp <- df %>% 
-           group_by(author_id) %>% 
-           filter(sum(n_commits)>=min_total_commits)%>%
-           group_by(author_age) %>%
-           summarise(n=mean(n_commits))   
+df_temp <- df %>%
+           group_by(author_id) %>%
+           filter(total_commits>=filter_productivity_commits_min,total_commits<filter_productivity_commits_max) %>%
+           filter(n_commits>0) %>%
+           summarize(period_active=n(),total_commits=sum(n_commits),n_projects=max(n_projects)) 
 
 
-plot(df_temp$n,
-     xlab='Age of the Users in Months',
-     ylab='N. Commits',
-     main='Monthly Commits vs. Age of User')
+store <- matrix(0,6,6)
+store[1,1:4] <- as.numeric(df_temp %>% filter(period_active<=1) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
+                        
+store[2,1:4] <- as.numeric(df_temp %>% filter(period_active>1,period_active<=3) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
+
+store[3,1:4] <- as.numeric(df_temp %>% filter(period_active>3,period_active<=6) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
+
+                        
+store[4,1:4] <- as.numeric(df_temp %>% filter(period_active>6,period_active<=12) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
+                        
+store[5,1:4] <- as.numeric(df_temp %>% filter(period_active>12,period_active<=36) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
+                        
+store[6,1:4] <- as.numeric(df_temp %>% filter(period_active>36) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
+
+store[,5] <- store[,3] / sum(store[,3])
+store[,6] <- store[,2] / sum(store[,2])
+colnames(store) <- c('Average Tot. Commits', 'N. Users','Total Number of Commits','Average N. Of Projects','Share of Total Commits','Share of Total Users')
+rownames(store) <- c('1 month','2-3 months', '4-6 months', '7-12 months', '13-36 months', '36+ months')
+
+print(round(store,3))
+```
+
+Here try to understand if there is any observable pattern in the life-cycle of users. 
+
+```{r}
+
+plot_life_profile <-function(lb,ub,title){
+    df_temp <- df %>% 
+               group_by(author_id) %>% 
+               mutate(active=as.numeric(n_commits>0)) %>%
+               filter(sum(active)>=lb,sum(active)<=ub)%>%
+               filter(author_age<=author_life) %>%
+               group_by(author_age) %>%
+               summarise(n=mean(n_commits),p=mean(active))   
+
+    df_temp_1 <- df %>% 
+               group_by(author_id) %>% 
+               mutate(active=as.numeric(n_commits>0)) %>%
+               filter(sum(active)>=lb,sum(active)<=ub)%>%
+    #           filter(author_age<=author_life) %>%
+               group_by(author_age) %>%
+               summarise(n=mean(n_commits),p=mean(active))  
+    
+    plot(df_temp$p[2:84],
+         xlab='Age of the Users in Months',
+         ylab='N. Commits',
+         main=title,
+         ylim=c(min(df_temp_1$p),max(df_temp$p)),
+         type = "l",
+         lty = 1,
+         col = 'blue')
+
+    lines(df_temp_1$p[2:84],col='red')
+    legend("bottomleft", legend = c("Removed Users who Exit", "Included Users who Exit"),
+           col = c("blue", "red"), lty = c(1,1), cex = 0.8)
+    
+    return()
+
+    
+}
+
+plot_life_profile(37,200,'Probability of Making at least one Commit vs. Age, Active 36+')
+plot_life_profile(13,36,'Probability of Making at least one Commit vs. Age, Active 13-36')
+plot_life_profile(6,12,'Probability of Making at least one Commit vs. Age, Active 6-12')
+
+
+
+
 ```
 
 
