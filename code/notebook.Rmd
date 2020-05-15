@@ -326,13 +326,16 @@ end_date <- as.Date('2019-05-01')
 
 df <- df_commits %>%
       group_by(month=as.Date(floor_date(commit_time,period)),project_id) %>%
-      summarize(n_commits=n()) %>%
+      summarize(n_commits=n(),monthly_n_authors=n_distinct(author_id)) %>%
       filter(month>=start_date) %>%
       filter(month<=end_date)
 
 df_p <- df_commits %>%
         group_by(project_id) %>%
-        summarize(project_created_at=min(commit_time),last_commit=max(commit_time),total_commits=n())
+        summarize(project_created_at=min(commit_time),
+                  last_commit=max(commit_time),
+                  total_commits=n(),
+                  n_authors=n_distinct(author_id))
 
 df_t <- expand.grid(project_id = unique(df$project_id),
                     month = seq(start_date,end_date,by=period))
@@ -357,24 +360,48 @@ df$months_active <- year(df$last_commit) * 12 + month(df$last_commit) - 12 * yea
 
 ```
 
-```{r}
+```{r,echo=FALSE}
 df_temp <- df %>%
            group_by(project_id) %>%
            filter(last_commit<='2018-06-01') %>%
-           summarise(total_commits=sum(n_commits),months_active=max(months_active),)
+           summarise(total_commits=sum(n_commits),months_active=max(months_active),n_authors=max(n_authors))
 
-           
+store <- matrix(0,6,6)           
+as.numeric(df_temp %>% filter(months_active<=1) %>% summarise(n_projects = n(),mean(total_commits)))
 
-as.numeric(df_temp %>% filter(total_commits<=10,total_commits>0) %>% summarise(n_projects = n(),mean(months_active)))
+store_fun<- function(df_temp,lb,ub){
+  
+  return(as.numeric(df_temp %>% filter(months_active>=lb,months_active<=ub) %>% summarise(n_projects = n(),mean(total_commits),max(total_commits),median(total_commits),mean(n_authors),max(n_authors),median(n_authors))))
 
-as.numeric(df_temp %>% filter(total_commits<=100,total_commits>10) %>% summarise(n_projects = n(),mean(months_active)))
+  }
 
-as.numeric(df_temp %>% filter(total_commits<=1000,total_commits>100) %>% summarise(n_projects = n(),mean(months_active)))
 
-as.numeric(df_temp %>% filter(total_commits<=10000,total_commits>1000) %>% summarise(n_projects = n(),mean(months_active)))
+store[1,] <- store_fun(df_temp,0,1)
+store[2,] <- store_fun(df_temp,2,3)
+store[3,] <- store_fun(df_temp,4,6)
+store[4,] <- store_fun(df_temp,7,12)
+store[5,] <- store_fun(df_temp,13,36)
+store[6,] <- store_fun(df_temp,37,1000)
 
-as.numeric(df_temp %>% filter(total_commits<=1000000,total_commits>10000) %>% summarise(n_projects = n(),mean(months_active)))
+colnames(store) <- c('N. Projects','Mean Total Commits','Max Total Commits','Median Total Commits','Mean N. Authors')
+rownames(store) <- c('1 month','2-3 months', '4-6 months', '7-12 months', '13-36 months', '36+ months')
+print(store)
 ```
+
+```{r}
+
+df_temp <- df %>%
+           group_by(month) %>%
+           filter(project_age==0) %>%
+           summarise(n_new_projects=n()) %>%
+           filter(month>=start_date,month<=end_date)
+
+
+plot(df_temp$month,df_temp$n_new_projects)
+
+
+```
+
 
 
 ```{r}
