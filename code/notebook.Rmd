@@ -8,6 +8,7 @@ output:
 ```{r,echo=FALSE}
 library(dplyr,warn.conflicts = FALSE)
 library(lubridate,warn.conflicts = FALSE)
+options(warn = -1)
 ```
 
 ```{r,echo=FALSE}
@@ -126,7 +127,7 @@ for (i in 1:(length(thresholds)-1)){
 colnames(store) <- c('<25','[25,50)','[50,75)','[75,100)','[100,250)','[250,500)','500+')
 rownames(store) <- c('Avg. Number of Project','N. Authors')
 write.csv(store,'C:/Users/mmore/Dropbox/GitHub/Output/table_1.csv')
-View(store)
+print(store)
 rm(df)
 ```
 
@@ -308,9 +309,11 @@ There are a total number of `r n_active_users` users who:
 * *n_languages*: number of languages an author has committed in hist life
 
 ```{r}
-h <- hist(df_u$n_languages, breaks = 100, plot=FALSE,title='N. Languages')
+h <- hist(df_u$n_languages, breaks = 100, plot=FALSE)
 h$counts=h$counts/sum(h$counts)
-plot(h)
+plot(h,
+     main='N. Languages',
+     xlab='')
 
 ```
 
@@ -366,7 +369,7 @@ df_temp <- df %>%
            group_by(project_id) %>%
            summarise(total_commits=max(total_commits),months_active=max(months_active),n_authors=max(n_authors))
 
-store <- matrix(0,6,7)           
+store <- matrix(0,6,8)           
 
 store_fun<- function(df_temp,lb,ub){
   
@@ -375,16 +378,17 @@ store_fun<- function(df_temp,lb,ub){
   }
 
 
-store[1,] <- store_fun(df_temp,0,1)
-store[2,] <- store_fun(df_temp,2,3)
-store[3,] <- store_fun(df_temp,4,6)
-store[4,] <- store_fun(df_temp,7,12)
-store[5,] <- store_fun(df_temp,13,36)
-store[6,] <- store_fun(df_temp,37,1000)
+store[1,1:7] <- store_fun(df_temp,0,1)
+store[2,1:7] <- store_fun(df_temp,2,3)
+store[3,1:7] <- store_fun(df_temp,4,6)
+store[4,1:7] <- store_fun(df_temp,7,12)
+store[5,1:7] <- store_fun(df_temp,13,36)
+store[6,1:7] <- store_fun(df_temp,37,1000)
+store[,8] <- store[,1]/ sum(store[,1])
 
-colnames(store) <- c('N. Projects','Mean Total Commits','Max Total Commits','Median Total Commits','Mean N. Authors','Max N. Authors', 'Median N. Authors')
+colnames(store) <- c('N. Projects','Mean Total Commits','Max Total Commits','Median Total Commits','Mean N. Authors','Max N. Authors', 'Median N. Authors','Shere of Total Projects')
 rownames(store) <- c('1 month','2-3 months', '4-6 months', '7-12 months', '13-36 months', '36+ months')
-print(store)
+print(round(store,3))
 ```
 
 #New Projects
@@ -398,7 +402,10 @@ df_temp <- df %>%
            filter(month>=start_date,month<=end_date)
 
 
-plot(df_temp$month,df_temp$n_new_projects)
+plot(df_temp$month,df_temp$n_new_projects,
+     xlab='Time',
+     ylab='Number',
+     main='Number of New Projects over Time')
 
 
 ```
@@ -476,7 +483,10 @@ df <- df_commits %>%
 
 df_p <- df_commits %>%
         group_by(author_id) %>%
-        summarize(author_first_commit=min(commit_time),n_projects=n_distinct(project_id),author_last_commit=max(commit_time))
+        summarize(author_first_commit=min(commit_time),
+                  n_projects=n_distinct(project_id),
+                  author_last_commit=max(commit_time),
+                  n_languages=n_distinct(language_code))
 
 df_t <- expand.grid(author_id = unique(df$author_id),
                     month = seq(start_date,end_date,by=period))
@@ -554,43 +564,53 @@ df_temp <- df %>%
 hist(df_temp$author_age,
      main='Age of the User at Largest Contribution',
      ylab='N. Users',
-     xlab='Age')
+     xlab='Age',
+     breaks=0:120)
+
 
 
 ```
-We consider here another measure of productivity, which correlates with the number of commits made in total by a user. Considering that ultimately we are measuring the activity of users by the decision to commit, now for each user, we count the total number of periods an user has been active, and we classify users accordingly. For each category of user, we then compute the average number of commits the users in the category have made in their lite on GitHub, the total number of commits made by a category. As we can see, 33% of users contributed in at most one month, contributing to approximately 2% of the total commits. Another 26% of the users contributed for a total of 2-3 months, and a total 5.7% of the total number of commits. These two together represent the most casual contributors to GitHub, and represent approximately 60% of users. It is probably important to remove the more casual users, since it would be hard to justify their contributions in light of the variation in the observables we observe. 
+We consider here another measure of productivity, which correlates with the number of commits made in total by a user. Considering that ultimately we are measuring the activity of users by the decision to commit, now for each user, we count the total number of periods an user has been active, and we classify users accordingly. For each category of user, we then compute the average number of commits the users in the category have made in their lite on GitHub, the total number of commits made by a category. As we can see, 33% of users contributed in at most one month, contributing to approximately 2% of the total commits. Another 26% of the users contributed for a total of 2-3 months, and a total 5.7% of the total number of commits. These two together represent the most casual contributors to GitHub, and represent approximately 60% of users. It is probably important to remove the more casual users, since it would be hard to justify their contributions in light of the variation in the observables. 
 
 ```{r}
 df_temp <- df %>%
            group_by(author_id) %>%
            filter(total_commits>=filter_productivity_commits_min,total_commits<filter_productivity_commits_max) %>%
            filter(n_commits>0) %>%
-           summarize(period_active=n(),total_commits=sum(n_commits),n_projects=max(n_projects)) 
+           summarize(period_active=n(),total_commits=sum(n_commits),n_projects=max(n_projects),n_languages=max(n_languages)) 
 
+compute_table <- function(df_temp,lb,ub){
+  
+  result <- df_temp %>% 
+              filter(period_active<=ub,period_active>=lb) %>%      
+              summarise(average_total_commits=mean(total_commits),
+                        n_obs=n(),
+                        total_commits=sum(total_commits),
+                        average_projects=mean(n_projects),
+                        n_languages=mean(n_languages))
 
-store <- matrix(0,6,6)
-store[1,1:4] <- as.numeric(df_temp %>% filter(period_active<=1) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
-                        
-store[2,1:4] <- as.numeric(df_temp %>% filter(period_active>1,period_active<=3) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
+    result <- as.numeric(result)
 
-store[3,1:4] <- as.numeric(df_temp %>% filter(period_active>3,period_active<=6) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
+  return(result)
+  
+}
 
-                        
-store[4,1:4] <- as.numeric(df_temp %>% filter(period_active>6,period_active<=12) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
-                        
-store[5,1:4] <- as.numeric(df_temp %>% filter(period_active>12,period_active<=36) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
-                        
-store[6,1:4] <- as.numeric(df_temp %>% filter(period_active>36) %>% summarise(average_total_commits=mean(total_commits),n_obs=n(),total_commits=sum(total_commits),average_projects=mean(n_projects)))
-
-store[,5] <- store[,3] / sum(store[,3])
-store[,6] <- store[,2] / sum(store[,2])
-colnames(store) <- c('Average Tot. Commits', 'N. Users','Total Number of Commits','Average N. Of Projects','Share of Total Commits','Share of Total Users')
+store <- matrix(0,6,7)
+store[1,1:5] <- compute_table(df_temp,0,1)
+store[2,1:5] <- compute_table(df_temp,2,3)
+store[3,1:5] <- compute_table(df_temp,4,6)
+store[4,1:5] <- compute_table(df_temp,7,12)
+store[5,1:5] <- compute_table(df_temp,13,36)
+store[6,1:5] <- compute_table(df_temp,37,200)                        
+store[,6] <- store[,3] / sum(store[,3])
+store[,7] <- store[,2] / sum(store[,2])
+colnames(store) <- c('Average Tot. Commits', 'N. Users','Total Number of Commits','Average N. Of Projects','Avg. Number of Languages','Share of Total Commits','Share of Total Users')
 rownames(store) <- c('1 month','2-3 months', '4-6 months', '7-12 months', '13-36 months', '36+ months')
 
 print(round(store,3))
 ```
 
-Here try to understand if there is any observable pattern in the life-cycle of users. 
+TO DO: Compute the number of different projects per month for each category of users, conditional on making some commits
 
 ```{r}
 
@@ -621,7 +641,7 @@ plot_life_profile <-function(lb,ub,title){
          col = 'blue')
 
     lines(df_temp_1$p[2:84],col='red')
-    legend("bottomleft", legend = c("Removed Users who Exit", "Included Users who Exit"),
+    legend("topright", legend = c("Removed Users who Exit", "Included Users who Exit"),
            col = c("blue", "red"), lty = c(1,1), cex = 0.8)
     
     return()
@@ -629,16 +649,16 @@ plot_life_profile <-function(lb,ub,title){
     
 }
 
-plot_life_profile(37,200,'Probability of Making at least one Commit vs. Age, Active 36+')
-plot_life_profile(13,36,'Probability of Making at least one Commit vs. Age, Active 13-36')
-plot_life_profile(6,12,'Probability of Making at least one Commit vs. Age, Active 6-12')
-
+plot_life_profile(37,200,'Probability of Making at least one Commit vs. Age, Active 36+ months')
+plot_life_profile(13,36,'Probability of Making at least one Commit vs. Age, Active 13-36 months')
+plot_life_profile(7,12,'Probability of Making at least one Commit vs. Age, Active 6-12 months')
+plot_life_profile(3,6,'Probability of Making at least one Commit vs. Age, Active 6-12 months')
 
 
 
 ```
 
 
-
+TODO: create measure of people exit/death: 12 months after last commit/24 months + do some sensitivity analysis. Check how many come back after these periods of time 
 
 
