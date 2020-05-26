@@ -3,7 +3,7 @@ aggcommits.author_total_projects,
 aggcommits.author_total_commits FROM
 (SELECT tab1.author_id, tab1.commit_year, tab1.commit_month,
 tab1.project_id, tab1.author_current_commits_in_project,
-tab2.author_current_python_projects, tab2.author_current_commits_in_python FROM
+tab2.author_current_python_projects, tab2.author_current_python_commits FROM
 (SELECT pycommits.author_id,
 pycommits.commit_year,
 pycommits.commit_month,
@@ -34,7 +34,7 @@ LEFT JOIN
 pycommits.commit_year,
 pycommits.commit_month,
 COUNT(DISTINCT(pycommits.project_id)) AS author_current_python_projects,
-COUNT(DISTINCT(pycommits.commit_id)) AS author_current_commits_in_python
+COUNT(DISTINCT(pycommits.commit_id)) AS author_current_python_commits
 FROM 
 (SELECT commits.author_id,
 YEAR(commits.created_at) AS commit_year,
