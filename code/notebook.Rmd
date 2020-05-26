@@ -8,7 +8,7 @@ output:
 ```{r,echo=FALSE}
 library(dplyr,warn.conflicts = FALSE)
 library(lubridate,warn.conflicts = FALSE)
-options(warn = -1)
+options(warnings = -1)
 ```
 
 ```{r,echo=FALSE}
@@ -39,10 +39,7 @@ for (language in languages[-1]){
 
 }
 
-rm(df_temp)
-```
 
-```{r,echo=FALSE}
 head(df_commits)
 colnames(df_commits)[colnames(df_commits) == 'id'] <- 'commit_id'
 colnames(df_commits)[colnames(df_commits) == 'commit_created_at'] <- 'commit_time'
@@ -99,14 +96,6 @@ var_100 <- 100 - round(ecdf(commits_project$total_commits)(100) * 100, 1)
 * `r var_10`% of the projects have at most 10 commits.  
 * `r var_100`% of the projects have at least 100 commits.  
 
-```{r,include=FALSE}
-
-hist(commits_project$total_commits[commits_project$total_commits>=10 & commits_project$total_commits<200])
-
-hist(commits_project$total_commits[commits_project$total_commits>=200 & commits_project$total_commits<1000])
-
-hist(commits_project$total_commits[commits_project$total_commits>=1000 & commits_project$total_commits<10000])
-```
 
 
 Is it true that more productive users, i.e. users that have a higher number of commits, are also involved in more projects? 
@@ -127,7 +116,7 @@ for (i in 1:(length(thresholds)-1)){
 colnames(store) <- c('<25','[25,50)','[50,75)','[75,100)','[100,250)','[250,500)','500+')
 rownames(store) <- c('Avg. Number of Project','N. Authors')
 write.csv(store,'C:/Users/mmore/Dropbox/GitHub/Output/table_1.csv')
-print(store)
+print(round(store,0))
 rm(df)
 ```
 
@@ -470,23 +459,31 @@ new_plot(df,2501,100000)
 
 Here we want to investigate some statistics about the contribution history of users during their life on GitHub. 
 
-```{r,include=FALSE}
+```{r,echo=FALSE}
 period <- 'month'
 start_date <- as.Date('2009-06-01')
 end_date <- as.Date('2019-05-01')
 
+#Characteristic Author-Month
+
+df_commits$commit_month <- as.Date(floor_date(df_commits$commit_time,period))
+df_commits$date <- month(df_commits$commit_month) + year(df_commits$commit_month) * 12
+
 df <- df_commits %>%
       group_by(month=as.Date(floor_date(commit_time,period)),author_id) %>%
-      summarize(n_commits=n()) %>%
-      filter(month>=start_date) %>%
-      filter(month<=end_date)
+      summarize(n_commits=n(),
+                n_projects_monthly=n_distinct(project_id))
+
+#Characteristic of the Author
 
 df_p <- df_commits %>%
         group_by(author_id) %>%
         summarize(author_first_commit=min(commit_time),
                   n_projects=n_distinct(project_id),
                   author_last_commit=max(commit_time),
-                  n_languages=n_distinct(language_code))
+                  n_languages=n_distinct(language_code),
+                  total_commits=n(),
+                  n_active_months=n_distinct(date))
 
 df_t <- expand.grid(author_id = unique(df$author_id),
                     month = seq(start_date,end_date,by=period))
@@ -497,33 +494,24 @@ df <- df_t %>%
 rm(df_t)
 
 df$n_commits[is.na(df$n_commits)] <- 0 
+df$n_projects_monthly[is.na(df$n_projects_monthly)] <- 0 
 
 df <- df %>% 
-      left_join(df_p,by="author_id") %>%
-      filter(author_first_commit>=start_date) %>%
-      filter(month>=author_first_commit)
+      left_join(df_p,by="author_id") 
 
 rm(df_p)
 
 df$author_age <- year(df$month) * 12 + month(df$month) - 12 * year(df$author_first_commit) - month(df$author_first_commit)
 
-df_temp <- df %>% 
-           group_by(author_id) %>% 
-           filter(author_first_commit>='2010-01-01') %>%
-           filter(author_first_commit<='2018-01-01') %>%
-           summarize(total_commits=sum(n_commits)) 
-
-df <- df %>% 
-      left_join(df_temp,by="author_id") #%>%
-      #filter(author_last_commit<='2018-06-01')
       
 
 df$share_commits <- df$n_commits / df$total_commits
 
-rm(df_temp)
+rm(df_temp,df_t)
 
 df$author_life <- year(df$author_last_commit) * 12 + month(df$author_last_commit) - 12 * year(df$author_first_commit) - month(df$author_first_commit)
 
+summary(df)
 
 ```
 
@@ -558,7 +546,8 @@ df_temp <- df %>%
            group_by(author_id) %>%
            filter(share_commits==max(share_commits)) %>%
            filter(author_age==min(author_age)) %>%
-           filter(total_commits>=filter_productivity_commits_min,total_commits<filter_productivity_commits_max)
+           filter(total_commits>=filter_productivity_commits_min,total_commits<filter_productivity_commits_max) %>%
+           filter(author_first_commit>='2010-01-01')
 
 
 hist(df_temp$author_age,
@@ -575,9 +564,15 @@ We consider here another measure of productivity, which correlates with the numb
 ```{r}
 df_temp <- df %>%
            group_by(author_id) %>%
-           filter(total_commits>=filter_productivity_commits_min,total_commits<filter_productivity_commits_max) %>%
+           filter(total_commits>=filter_productivity_commits_min,
+                  total_commits<filter_productivity_commits_max,
+                  author_first_commit>='2010-01-01') %>%
            filter(n_commits>0) %>%
-           summarize(period_active=n(),total_commits=sum(n_commits),n_projects=max(n_projects),n_languages=max(n_languages)) 
+           summarize(period_active=n(),
+                     total_commits=sum(n_commits),
+                     n_projects=max(n_projects),
+                     n_languages=max(n_languages),
+                     n_projects_monthly=mean(n_projects_monthly)) 
 
 compute_table <- function(df_temp,lb,ub){
   
@@ -587,7 +582,8 @@ compute_table <- function(df_temp,lb,ub){
                         n_obs=n(),
                         total_commits=sum(total_commits),
                         average_projects=mean(n_projects),
-                        n_languages=mean(n_languages))
+                        n_languages=mean(n_languages),
+                        n_projects_monthly=mean(n_projects_monthly))
 
     result <- as.numeric(result)
 
@@ -595,22 +591,60 @@ compute_table <- function(df_temp,lb,ub){
   
 }
 
-store <- matrix(0,6,7)
-store[1,1:5] <- compute_table(df_temp,0,1)
-store[2,1:5] <- compute_table(df_temp,2,3)
-store[3,1:5] <- compute_table(df_temp,4,6)
-store[4,1:5] <- compute_table(df_temp,7,12)
-store[5,1:5] <- compute_table(df_temp,13,36)
-store[6,1:5] <- compute_table(df_temp,37,200)                        
-store[,6] <- store[,3] / sum(store[,3])
-store[,7] <- store[,2] / sum(store[,2])
-colnames(store) <- c('Average Tot. Commits', 'N. Users','Total Number of Commits','Average N. Of Projects','Avg. Number of Languages','Share of Total Commits','Share of Total Users')
+store <- matrix(0,6,8)
+store[1,1:6] <- compute_table(df_temp,0,1)
+store[2,1:6] <- compute_table(df_temp,2,3)
+store[3,1:6] <- compute_table(df_temp,4,6)
+store[4,1:6] <- compute_table(df_temp,7,12)
+store[5,1:6] <- compute_table(df_temp,13,36)
+store[6,1:6] <- compute_table(df_temp,37,200)                        
+store[,7] <- store[,3] / sum(store[,3])
+store[,8] <- store[,2] / sum(store[,2])
+colnames(store) <- c('Average Tot. Commits', 'N. Users','Total Number of Commits','Average N. Of Projects','Avg. Number of Languages','N. of Projects Per Month, if Active','Share of Total Commits','Share of Total Users')
 rownames(store) <- c('1 month','2-3 months', '4-6 months', '7-12 months', '13-36 months', '36+ months')
 
 print(round(store,3))
 ```
 
-TO DO: Compute the number of different projects per month for each category of users, conditional on making some commits
+```{r}
+
+compute <- function(df,lb,ub){
+  
+
+  n<- df %>% 
+      filter(author_age>=0, n_projects_monthly>=2,n_active_months>=lb,n_active_months<=ub) %>%
+      summarise(n())
+  
+  N <- df %>% 
+      filter(author_age>=0, n_projects_monthly>=1,n_active_months>=lb,n_active_months<=ub) %>%
+      summarise(n())
+  
+  M <- df %>% 
+      filter(author_age>=0, n_projects_monthly>=0,n_active_months>=lb,n_active_months<=ub) %>%
+      summarise(n())
+  
+  return(c(as.numeric(n/N),as.numeric(n/M)))
+
+}
+
+store <- matrix(0,6,2)
+
+store[1, ]<- compute(df,1,1)
+store[2, ]<- compute(df,2,3)
+store[3, ]<- compute(df,4,6)
+store[4, ]<- compute(df,7,12)
+store[5, ]<- compute(df,13,36)
+store[6, ]<- compute(df,37,120)
+
+rownames(store) <- c('1 month','2-3 months', '4-6 months', '7-12 months', '13-36 months', '36+ months')
+colnames(store) <- c('Share of Observations in which Users are Active','Share of Total Observations')
+
+
+print(round(store,3))
+
+```
+
+
 
 ```{r}
 
@@ -619,7 +653,7 @@ plot_life_profile <-function(lb,ub,title){
                group_by(author_id) %>% 
                mutate(active=as.numeric(n_commits>0)) %>%
                filter(sum(active)>=lb,sum(active)<=ub)%>%
-               filter(author_age<=author_life) %>%
+               filter(author_age<=author_life,author_age>=0) %>%
                group_by(author_age) %>%
                summarise(n=mean(n_commits),p=mean(active))   
 
@@ -628,7 +662,7 @@ plot_life_profile <-function(lb,ub,title){
                mutate(active=as.numeric(n_commits>0)) %>%
                filter(sum(active)>=lb,sum(active)<=ub)%>%
     #           filter(author_age<=author_life) %>%
-               group_by(author_age) %>%
+               group_by(author_age,author_age>=0) %>%
                summarise(n=mean(n_commits),p=mean(active))  
     
     plot(df_temp$p[2:84],
@@ -651,14 +685,133 @@ plot_life_profile <-function(lb,ub,title){
 
 plot_life_profile(37,200,'Probability of Making at least one Commit vs. Age, Active 36+ months')
 plot_life_profile(13,36,'Probability of Making at least one Commit vs. Age, Active 13-36 months')
-plot_life_profile(7,12,'Probability of Making at least one Commit vs. Age, Active 6-12 months')
-plot_life_profile(3,6,'Probability of Making at least one Commit vs. Age, Active 6-12 months')
+plot_life_profile(7,12,'Probability of Making at least one Commit vs. Age, Active 7-12 months')
+plot_life_profile(3,6,'Probability of Making at least one Commit vs. Age, Active 3-6 months')
+```
+
+```{r,echo=FALSE}
+plot_projects_profile <-function(lb,ub,title){
+    df_temp <- df %>% 
+               group_by(author_id) %>% 
+               mutate(active=as.numeric(n_commits>0)) %>%
+               filter(sum(active)>=lb,sum(active)<=ub)%>%
+               filter(author_age<=author_life,author_age>=0) %>%
+               group_by(author_age) %>%
+               summarise(n=mean(n_projects_monthly))   
+
+    df_temp_1 <- df %>% 
+               group_by(author_id) %>% 
+               mutate(active=as.numeric(n_commits>0)) %>%
+               filter(sum(active)>=lb,sum(active)<=ub,author_age>=0)%>%
+    #           filter(author_age<=author_life) %>%
+               group_by(author_age) %>%
+               summarise(n=mean(n_projects_monthly))  
+    
+    plot(df_temp$n[1:84],
+         xlab='Age of the Users in Months',
+         ylab='N. Commits',
+         main='',
+         ylim=c(min(df_temp_1$n[2:84]),max(df_temp$n[1:84])),
+         type = "l",
+         lty = 1,
+         col = 'blue')
+
+    lines(df_temp_1$n[2:84],col='red')
+    legend("topright", legend = c("Removed Users who Exit", "Included Users who Exit"),
+           col = c("blue", "red"), lty = c(1,1), cex = 0.8)
+    
+    return()
+
+    
+}
+
+plot_projects_profile(37,200,'Average N. of Projects vs. Age, Active 36+ months')
+
+plot_projects_profile(13,36,'Average N. of Projects vs. Age, Active 13-36 months')
+
+plot_projects_profile(7,12,'Average N. of Projects vs. Age, Active 7-12 months')
+
+plot_projects_profile(3,6,'Average N. of Projects vs. Age, Active 3-6 months')
+```
+
+
+
+
+
+#Users Exit
+```{r}
+df$active <- df$n_commits>0
+df$month_numeric <- year(df$month) * 12 + month(df$month)
+
+df_temp <- df %>%
+           filter(share_commits<1) %>%
+           select(month_numeric,active,author_id)
+
+df_t <- expand.grid(author_id = unique(df_temp$author_id),
+                    month_numeric = unique(df_temp$month_numeric))
+
+df_temp <- df_t %>% left_join(df_temp,by=c('author_id','month_numeric'))
+
+N_authors <- as.numeric(df_temp %>% summarise(n_distinct(author_id)))
+N_periods <- as.numeric(df_temp %>% summarise(n_distinct(month_numeric)))
+
+list_users <- unique(df_temp$author_id)
+list_periods <- unique(df_temp$month_numeric)
+
+history_activity <- matrix(0,N_authors,N_periods)
+
+df_temp <- df_temp[order(df_temp$author_id),]
+df_temp$active[is.na(df_temp$active)] <- FALSE 
+
+c_m <- 1
+for (month in list_periods){
+  
+    df_ttemp <- df_temp[df_temp$month_numeric==month, ]
+    active <- df_ttemp$active[order(df_ttemp$author_id)]
+    
+    
+    if (length(active)>0){
+
+      if (c_m>1){
+
+              history_activity[,c_m] <- (history_activity[,c_m-1] + 1) * (1 - active)
+                
+      } else{
+        
+              history_activity[,c_m] <- 1 - active
+        
+      }
+
+    }
+    
+    c_m <- c_m + 1
+
+  }
+  
 
 
 
 ```
 
+```{r,echo=FALSE}
+ha <- apply(history_activity, 1, function(row) all(row>0))
+history_activity_r <- history_activity[!ha,]
 
-TODO: create measure of people exit/death: 12 months after last commit/24 months + do some sensitivity analysis. Check how many come back after these periods of time 
+store <- matrix(NA,nrow(history_activity_r),3)
+store[,1] <- apply(history_activity_r,1, function(x) min(which(x==0)))
+store[,2] <- apply(history_activity_r,1, function(x) max(which(x==0)))
+store[,3] <- store[,2] - store[,1]
+
+ hist(store[,3],
+      main='',
+      xlab='Max Number of Months of Inactivity followed by Subsequent Commit')
+ 
+print(quantile(store[,3],c(0.80,0.90,0.95,0.99)))
+
+
+
+           
+```
+
 
 
