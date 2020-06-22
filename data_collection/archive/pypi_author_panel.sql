@@ -1,0 +1,7 @@
+SELECT
+author_id,
+author_total_projects,
+author_total_commits,
+author_current_python_projects,
+author_current_python_commits
+FROM
