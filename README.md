@@ -1,6 +1,26 @@
 # Github Data Research
 Research on GitHub collaboration patterns.
 
+## Environment
+In the repo directory, run
+```
+conda env create -f binder/environment.yml 
+conda activate githubdata
+jupyter labextension install @jupyter-widgets/jupyterlab-manager
+conda install ipykernel
+python3 -m ipykernel install --user --name=githubdata
+conda deactivate
+```
+Package environment:
+```
+conda-pack
+```
+
+To remove kernel in jupyter
+```
+jupyter kernelspec list
+jupyter kernelspec uninstall unwanted-kernel
+```
 ## Data Collection
 
 Folder "data_collection" stores queries that collects data in the sample. 
